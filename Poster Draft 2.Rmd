@@ -1,0 +1,354 @@
+---
+title: "ECO 530 - Poster Draft 2"
+author: "Fall 2024 - Ibrahim Quansah"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+
+
+```{r, warning=FALSE, message=FALSE}
+
+#Loading Libraries
+
+library(tidyverse)
+library(kableExtra)
+library(vtable)
+library(modelsummary)
+library(dplyr)
+library(readr)
+library(modelsummary)
+library(ggplot2)
+library(knitr)
+library(tinytex)
+library(tseries)
+library(estimatr)
+library(car)
+library(lmtest)
+```
+
+
+
+**Research Question**
+
+Is there any relationship between U.S. economic growth (GDP) and trade volumes (Net Trade)?
+
+Purpose: To identify whether a correlation exists between the two variables, meaning that changes in trade volumes might correlate with changes in economic growth (GDP).
+
+
+**Introduction**
+
+This study explores the relationship between economic growth, measured by Gross Domestic Product (GDP), and trade volumes, specifically net trade, in the United States. Net trade refers to the difference between a country’s exports and imports, and it plays a crucial role in shaping the overall economic performance of a nation. In the context of the U.S., a key player in global trade, understanding how changes in trade volumes influence economic growth is critical for evaluating economic policies and trade agreements.
+
+I will utilize data on U.S. GDP and Net Trade from the World Bank DataBank, covering two decades. The GDP represents the total economic output of the country, while net trade captures the balance of goods and services traded internationally.
+
+
+
+**Data**
+
+```{r, warning=FALSE, message=FALSE}
+#Reading Net Trade File
+Net_Trade <- read_csv("~/ECO 530/Data/Net Trade.csv")
+head(Net_Trade)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Reading GDP File
+GDP <- read_csv("~/ECO 530/Data/GDP.csv")
+head(GDP)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Combining GDP and Net Trade in one data
+Data <- merge(Net_Trade, GDP, by = 'DATE', all = TRUE)
+
+Data$DATE <- as.Date(Data$DATE, format = "%m/%d/%Y")
+
+# Sort chronologically
+Data <- Data %>% arrange(DATE)
+
+#Formatting Table with Kable
+Data %>%
+  kable(caption = "U.S. GDP and Net Trade (1993-2023)") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) 
+```
+
+```{r, warning=FALSE, message=FALSE}
+
+# Summary statistics for GDP and Net Trade
+
+Summary_Table <- Data %>%
+  summarise(
+    GDP_Mean = mean(GDP),
+    GDP_Median = median(GDP),
+    GDP_SD = sd(GDP),
+    Net_Trade_Mean = mean(`Net Trade`),
+    Net_Trade_Median = median(`Net Trade`),
+    Net_Trade_SD = sd(`Net Trade`)
+  )
+
+# Creating a Table
+Table <- Summary_Table %>%
+  pivot_longer(cols = everything(), names_to = "Metric", values_to = "Value")
+
+# Displaying the table with kableExtra
+Table %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+Table
+```
+
+
+# Creating a line plot for GDP and Net Trade over time
+```{r, warning=FALSE, message=FALSE}
+# Melt the data to long format for ggplot2
+Data$DATE <- as.Date(Data$DATE, format = "%m/%d/%Y")
+Data$Years <- format(Data$DATE, "%Y")
+Data_long <- Data %>%
+  pivot_longer(cols = c(GDP, `Net Trade`), names_to = "Variable", values_to = "Value") %>%
+  select(Years, Variable, Value)
+
+# Create the line plot
+ggplot(Data_long, aes(x = Years, y = Value, color = Variable, group = Variable)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "GDP and Net Trade Over Time", x = "Year", y = "Value (Billion USD)") +
+  scale_y_continuous(labels = scales::comma, breaks = seq(0, 30000000, 5000000))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+#Creating Scatter Plot of Net Trade and GDP
+ggplot(Data, aes(x = GDP, y = `Net Trade`)) +
+  geom_point(color = "blue", size = 3) +  # Points in blue
+  labs(title = "Scatter Plot of Net Trade vs. GDP",
+       x = "GDP (Billion USD)",
+       y = "`Net Trade` (Billion USD)") +
+  theme_minimal() +  # Use a minimal theme
+  scale_x_continuous(labels = scales::comma)+
+  geom_smooth(method = "lm", color = "red", se = FALSE)
+
+
+# Calculate correlation between GDP and Net Trade
+correlation <- cor(Data$GDP, Data$`Net Trade`)
+
+# Display the correlation value
+correlation
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Reading GDPDEF File
+GDPDEF <- read_csv("~/ECO 530/Data/GDPDEF.csv")
+
+#Reading Interest Rate File
+Interest_Rate <- read_csv("~/ECO 530/Data/FEDFUNDS.csv")
+
+
+#Reading Government Expenditure File
+Gov_Expen <- read_csv("~/ECO 530/Data/Gov Expen.csv")
+colnames(Gov_Expen)[colnames(Gov_Expen) == "W068RCQ027SBEA"] <- "Government Expenditure"
+
+
+#Reading Unemployment Rate File
+UNRate <- read_csv("~/ECO 530/Data/UNRate.csv")
+
+
+#Reading Gross Private Domestic Investment (GPDI) File
+GPDI <- read_csv("~/ECO 530/Data/GPDI.csv")
+
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+Data2 <- data.frame(
+  DATE = Data$DATE,  # Assuming all lists have the same years
+  Net_Trade = Net_Trade$`Net Trade`, 
+  GDP = GDP$GDP,
+  GDPDEF = GDPDEF$GDPDEF,
+  Interest_Rate = Interest_Rate$'FEDFUNDS',
+  Gov_Expen = Gov_Expen$'Government Expenditure',
+  UNRate = UNRate$"UNRATE",
+  GPDI = GPDI$GPDI
+)
+# Sort chronologically
+Data2 <- Data2 %>% arrange(DATE)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+#Creating the lagged variables 
+Data2 <- Data2 %>% 
+  mutate( Lagged_GDP = dplyr::lag(GDP, 1), 
+          Lagged_Net_Trade = dplyr::lag(Net_Trade, 1) )
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Specify the file path and name 
+file_path <- "Data2.csv" # Create the CSV file 
+write.csv(Data2, file_path, row.names = FALSE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+Poster_Data <- read_csv("~/ECO 530/Data/Data2.csv")
+# Convert the 'DATE' column to a proper date format
+Poster_Data$DATE <- as.Date(Poster_Data$DATE, format = "%m/%d/%Y") 
+
+# Create a 'Years' column by extracting the year from the 'DATE'
+Poster_Data$Years <- as.numeric(format(Poster_Data$DATE, "%Y"))
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Performing the ADF test on GDP and Nettrade 
+adf.test(Poster_Data$GDP) 
+adf.test(Poster_Data$Net_Trade)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# List of control variables to check 
+control_vars <- c("GDP", "GDPDEF", "Interest_Rate", "Gov_Expen", "UNRate", "GPDI") 
+# Function to apply ADF test and print results 
+check_stationarity <- function(var_name, data) { test_result <- adf.test(data[[var_name]], alternative = "stationary") 
+print(paste("ADF Test for", var_name, ": p-value =", test_result$p.value)) } 
+# Check stationarity for each control variable 
+lapply(control_vars, check_stationarity, data = Poster_Data)
+```
+
+```{r, warning=FALSE, message=FALSE}
+reg1 <- lm_robust (Lagged_GDP ~ Lagged_Net_Trade, Poster_Data)
+
+
+modelsummary(list("Model 1" =reg1) , gof_map = c("nobs"), stars = TRUE,
+             fmt = 2, statistic= 'std.error', 
+             notes ="Robust SEs in parentheses",
+             title = "Regression Analysis of Net Trade on GDP",
+             output="kableExtra") %>% kable_classic_2()
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+reg2 <- lm_robust (Lagged_GDP ~ Lagged_Net_Trade + Years, Poster_Data)
+
+modelsummary(list("Model 2" = reg2), 
+              gof_map = c("nobs"), 
+              stars = TRUE,
+              statistic = 'std.error', 
+              notes = "Robust SEs in parentheses",
+              title = "Regression Analysis of Net Trade on GDP",
+              output = "kableExtra") %>% 
+  kable_classic_2()
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+reg3 <- lm_robust(Lagged_GDP ~ Lagged_Net_Trade + Years + GDPDEF + Interest_Rate + Gov_Expen + UNRate + GPDI, data = Poster_Data)
+
+
+modelsummary(list("Model 3"=reg3) , gof_map = c("nobs"), stars = TRUE,
+              statistic= 'std.error', 
+             notes ="Robust SEs in parentheses", 
+             output="kableExtra") %>% kable_classic()
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+calculate_vif <- function(reg3) {
+  formula <- formula(reg3)
+  variables <- all.vars(formula)[-1]  # Exclude the dependent variable
+  vif_values <- sapply(variables, function(var) {
+    other_vars <- variables[variables != var]
+    sub_model <- lm(as.formula(paste(var, "~", paste(other_vars, collapse = "+"))), data = Poster_Data)
+    1 / (1 - summary(sub_model)$r.squared)
+  })
+  return(vif_values)
+}
+
+# Apply custom VIF calculation to lm_robust
+vif_values <- calculate_vif(reg3)
+print(vif_values)
+```
+
+```{r, warning=FALSE, message=FALSE}
+dwtest(reg3)
+```
+
+```{r, warning=FALSE, message=FALSE}
+cor(Poster_Data[, c("Lagged_GDP", "Lagged_Net_Trade", "Years", "GDPDEF", "Interest_Rate", "Gov_Expen", "UNRate", "GPDI")])
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+
+# Ensure Poster_Data is sorted by 'Years' to maintain order
+Poster_Data <- Poster_Data %>%
+  arrange(Years)
+
+# Create differenced variables, filling the first value with NA
+Poster_Data <- Poster_Data %>%
+  mutate(
+    GDP_diff = c(NA, diff(GDP)),
+    NetTrade_diff = c(NA, diff(Net_Trade)),
+    GDPDEF_diff = c(NA, diff(GDPDEF)),
+    Interest_Rate_diff = c(NA, diff(Interest_Rate)),
+    Gov_Expen_diff = c(NA, diff(Gov_Expen)),
+    UNRate_diff = c(NA, diff(UNRate)),
+    GPDI_diff = c(NA, diff(GPDI)),
+  )
+
+# Remove the first row with NA values due to differencing
+Poster_Data <- na.omit(Poster_Data)
+
+# Check the structure of the filtered dataset to confirm changes
+str(Poster_Data)
+
+
+
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+# List of differenced variables to check
+differenced_vars <- c("GDP_diff", "GDPDEF_diff", "Interest_Rate_diff", "Gov_Expen_diff", "UNRate_diff", "GPDI_diff")
+
+# Check stationarity for each differenced variable
+lapply(differenced_vars, check_stationarity, data = Poster_Data)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Run the regression model with the differenced variables
+reg4 <- lm_robust(
+  GDP_diff ~ NetTrade_diff + Years + GDPDEF_diff + Interest_Rate_diff + Gov_Expen_diff + UNRate_diff + GPDI_diff,
+  data = Poster_Data
+)
+
+# Summarize the regression results
+modelsummary(list("Model 4"=reg4) , gof_map = c("nobs"), stars = TRUE,
+              statistic= 'std.error', 
+             notes ="Robust SEs in parentheses", 
+             output="kableExtra") %>% kable_classic()
+```
+
+```{r, warning=FALSE, message=FALSE}
+calculate_vif <- function(reg4) {
+  formula <- formula(reg4)
+  variables <- all.vars(formula)[-1]  # Exclude the dependent variable
+  vif_values <- sapply(variables, function(var) {
+    other_vars <- variables[variables != var]
+    sub_model <- lm(as.formula(paste(var, "~", paste(other_vars, collapse = "+"))), data = Poster_Data)
+    1 / (1 - summary(sub_model)$r.squared)
+  })
+  return(vif_values)
+}
+
+# Apply custom VIF calculation to lm_robust
+vif_values2 <- calculate_vif(reg4)
+print(vif_values2)
+
+```
